@@ -374,7 +374,7 @@ def main():
 
     init_db()
     threading.Thread(target=run_health_server, name="health-server", daemon=True).start()
-    app = Application.builder().token(BOT_TOKEN).bootstrap_retries(-1).build()
+    app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("id", id_command))
