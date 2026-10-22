@@ -6,7 +6,7 @@ Environment:
   ADMIN_ID   = your numeric Telegram user ID
   DB_PATH    = optional SQLite path (default: janeman_pro.db)
 Install: pip install -U python-telegram-bot
-Run:     python janemanrequest_full_update.py
+Run:     python janemanrequest_webservice.py
 
 Join-request DMs use ChatJoinRequest.user_chat_id. Telegram allows contacting
 that private chat for a limited period (5 minutes) after a join request, provided
@@ -45,7 +45,8 @@ CACHED_MESSAGES = []
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        body = b"JANEMAN bot health: OK\n"
+        # Render Web Service health endpoint; also supports /health checks.
+        body = b"JANEMAN service is running\n"
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -373,7 +374,7 @@ def main():
 
     init_db()
     threading.Thread(target=run_health_server, name="health-server", daemon=True).start()
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).bootstrap_retries(-1).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("id", id_command))
@@ -385,7 +386,17 @@ def main():
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, content_handler))
     app.add_error_handler(error_handler)
     log.info("JANEMAN bot starting")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Retry Telegram bootstrap/network failures instead of exiting immediately.
+    # Can run as a Render Web Service because the HTTP health server binds PORT.
+    # This endpoint does not itself prevent free-tier sleep; use an external monitor
+    # only if permitted by your hosting plan/policies, or choose an always-on plan.
+    app.run_polling(
+        poll_interval=1.0,
+        timeout=30,
+        bootstrap_retries=-1,
+        drop_pending_updates=False,
+        allowed_updates=Update.ALL_TYPES,
+    )
 
 
 if __name__ == "__main__":
